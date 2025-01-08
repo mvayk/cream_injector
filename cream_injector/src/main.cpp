@@ -46,15 +46,18 @@ std::uintptr_t get_process_id(std::string process_name) {
     if (snapshot) { CloseHandle(snapshot); }
 }
 
-bool inject(const char* dll_path, DWORD process_id) {
+bool inject(LPCSTR dll_path, DWORD process_id) {
     bool status = false;
 
     const HANDLE handle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, process_id);
+    if (handle == 0) { std::cout << "[-] Failed to obtain handle\n\n"; status = false; return status; }
 
     std::cout << "[+] Attempting to allocate memory\n";
     const LPVOID allocated = VirtualAllocEx(handle, 0, strlen(dll_path) + 1, MEM_COMMIT, PAGE_READWRITE);
     if (allocated == 0) { std::cout << "[-] Failed to allocate memory\n\n"; status = false; CloseHandle(handle); return status; }
     std::cout << "[+] Successfully allocated memory\n";
+
+    status = true;
 
     std::cout << "[+] Attempting to write memory\n";
     status = WriteProcessMemory(handle, allocated, dll_path, strlen(dll_path) + 1, 0);
@@ -72,10 +75,18 @@ bool inject(const char* dll_path, DWORD process_id) {
     if (thread == 0) { status = false; std::cout << "[-] Failed to call LoadLibraryA\n\n";  CloseHandle(handle); return status; }
     std::cout << "[+] Successfully called LoadLibraryA\n";
 
+    std::cout << "[+] Waiting for handle object\n";
     WaitForSingleObject(handle, INFINITE);
+    std::cout << "[+] Finished waiting for handle object\n";
+    
+    std::cout << "[+] Attempting to free memory\n";
+    status = VirtualFreeEx(handle, allocated, 0, MEM_RELEASE);
+    if (status == false) { std::cout << "[-] Failed to free memory\n\n"; CloseHandle(handle); return status; }
 
-    CloseHandle(thread);
-    CloseHandle(handle);
+    if (handle || thread) {
+		CloseHandle(thread);
+		CloseHandle(handle);
+    }
 
     return status;
 }
@@ -119,7 +130,7 @@ void command_handler(std::unordered_map<std::string, int> commands) {
 
                 std::cout << "\n[*] Full Path of DLL: " << dll_path << "\n";
                 std::cout << "[*] Process ID of " << arguments[2] << ": " << process_id << "\n\n";
-				if (inject((const char*)dll_path, process_id) == true) {
+				if (inject(dll_path, process_id) == true) {
 					std::cout << "[+] Injection was successful\n\n";
 				} else {
 					std::cout << "[+] Failed to inject into process\n\n";
