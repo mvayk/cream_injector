@@ -46,18 +46,18 @@ std::uintptr_t get_process_id(std::string process_name) {
     if (snapshot) { CloseHandle(snapshot); }
 }
 
-bool inject(const char* dll_path, std::uintptr_t process_id) {
+bool inject(const char* dll_path, DWORD process_id) {
     bool status = false;
 
-    const HANDLE handle = OpenProcess(PROCESS_ALL_ACCESS, 0, process_id);
+    const HANDLE handle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, process_id);
 
     std::cout << "[+] Attempting to allocate memory\n";
-    const PVOID allocated = VirtualAllocEx(handle, nullptr, strlen(dll_path) + 1, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    const LPVOID allocated = VirtualAllocEx(handle, 0, strlen(dll_path) + 1, MEM_COMMIT, PAGE_READWRITE);
     if (allocated == 0) { std::cout << "[-] Failed to allocate memory\n\n"; status = false; CloseHandle(handle); return status; }
     std::cout << "[+] Successfully allocated memory\n";
 
     std::cout << "[+] Attempting to write memory\n";
-    status = WriteProcessMemory(handle, allocated, dll_path, strlen(dll_path) + 1, NULL);
+    status = WriteProcessMemory(handle, allocated, dll_path, strlen(dll_path) + 1, 0);
     if (status == false) { std::cout << "[-] Failed to write memory\n\n"; CloseHandle(handle); return status; }
     std::cout << "[+] Successfully wrote to memory\n";
 
@@ -68,11 +68,11 @@ bool inject(const char* dll_path, std::uintptr_t process_id) {
     if (load_library == 0) { std::cout << "[-] Failed to get LoadLibraryA() from kernel32.dll\n\n"; status = false; CloseHandle(handle); return status; }
 
     std::cout << "[+] Attempting to call LoadLibraryA\n";
-    const HANDLE thread = CreateRemoteThread(handle, nullptr, 0, (LPTHREAD_START_ROUTINE)load_library, allocated, 0, nullptr);
+    const HANDLE thread = CreateRemoteThread(handle, 0, 0, (LPTHREAD_START_ROUTINE)load_library, allocated, 0, 0);
     if (thread == 0) { status = false; std::cout << "[-] Failed to call LoadLibraryA\n\n";  CloseHandle(handle); return status; }
     std::cout << "[+] Successfully called LoadLibraryA\n";
 
-    WaitForSingleObject(thread, INFINITE);
+    WaitForSingleObject(handle, INFINITE);
 
     CloseHandle(thread);
     CloseHandle(handle);
