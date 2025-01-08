@@ -46,8 +46,21 @@ std::uintptr_t get_process_id(std::string process_name) {
     if (snapshot) { CloseHandle(snapshot); }
 }
 
-bool inject(LPCSTR dll_path) {
+bool inject(LPCSTR dll_path, std::uintptr_t process_id) {
     bool status = false;
+
+    HANDLE handle = OpenProcess(PROCESS_ALL_ACCESS, 0, process_id);
+
+    PVOID allocated = VirtualAllocEx(handle, nullptr, sizeof(dll_path), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (allocated == 0) { status = false; return status; }
+
+    status = WriteProcessMemory(handle, allocated, dll_path, sizeof(dll_path), NULL);
+
+    HANDLE thread = CreateRemoteThread(handle, nullptr, NULL, LPTHREAD_START_ROUTINE(LoadLibraryA), allocated, NULL, nullptr);
+    if (thread == 0) { status = false; return status; }
+
+    CloseHandle(thread);
+    CloseHandle(handle);
 
     return status;
 }
@@ -90,12 +103,18 @@ void command_handler(std::unordered_map<std::string, int> commands) {
         if (arguments.size() < 3) {
             std::cout << "[!] Missing arguments for injection. Usage: inject <path/to/dll> <processname.exe>\n";
         } else {
-            LPCSTR dll_path = arguments[1].c_str();
+            std::cout << "[+] Attempting injection\n";
+            LPCSTR fake_dll_path = arguments[1].c_str();
+            LPCSTR dll_path = get_full_path(fake_dll_path);
+
             DWORD process_id = get_process_id(arguments[2]);
+
+            if (inject(dll_path, process_id) == true) {
+                std::cout << "[+] injection was successful\n";
+            } else {
+                std::cout << "[+] injection failed\n";
+            }
         }
-		std::cout << "\n";
-        std::cout << "[+] attempting injection\n";
-		std::cout << "\n";
         break;
     case 4:
         break;
