@@ -46,18 +46,33 @@ std::uintptr_t get_process_id(std::string process_name) {
     if (snapshot) { CloseHandle(snapshot); }
 }
 
-bool inject(LPCSTR dll_path, std::uintptr_t process_id) {
+bool inject(const char* dll_path, std::uintptr_t process_id) {
     bool status = false;
 
-    HANDLE handle = OpenProcess(PROCESS_ALL_ACCESS, 0, process_id);
+    const HANDLE handle = OpenProcess(PROCESS_ALL_ACCESS, 0, process_id);
 
-    PVOID allocated = VirtualAllocEx(handle, nullptr, sizeof(dll_path), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-    if (allocated == 0) { status = false; CloseHandle(handle); return status; }
+    std::cout << "[+] Attempting to allocate memory\n";
+    const PVOID allocated = VirtualAllocEx(handle, nullptr, strlen(dll_path) + 1, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (allocated == 0) { std::cout << "[-] Failed to allocate memory\n\n"; status = false; CloseHandle(handle); return status; }
+    std::cout << "[+] Successfully allocated memory\n";
 
-    status = WriteProcessMemory(handle, allocated, dll_path, sizeof(dll_path), NULL);
+    std::cout << "[+] Attempting to write memory\n";
+    status = WriteProcessMemory(handle, allocated, dll_path, strlen(dll_path) + 1, NULL);
+    if (status == false) { std::cout << "[-] Failed to write memory\n\n"; CloseHandle(handle); return status; }
+    std::cout << "[+] Successfully wrote to memory\n";
 
-    HANDLE thread = CreateRemoteThread(handle, nullptr, NULL, LPTHREAD_START_ROUTINE(LoadLibraryA), allocated, NULL, nullptr);
-    if (thread == 0) { status = false; CloseHandle(handle); return status; }
+    const HMODULE kernel32 = GetModuleHandleA("kernel32.dll");
+    if (kernel32 == 0) { std::cout << "[-] Failed to get HMODULE to kernel32.dll\n\n"; status = false; CloseHandle(handle); return status; }
+
+    const FARPROC load_library = GetProcAddress(kernel32, "LoadLibraryA");
+    if (load_library == 0) { std::cout << "[-] Failed to get LoadLibraryA() from kernel32.dll\n\n"; status = false; CloseHandle(handle); return status; }
+
+    std::cout << "[+] Attempting to call LoadLibraryA\n";
+    const HANDLE thread = CreateRemoteThread(handle, nullptr, 0, (LPTHREAD_START_ROUTINE)load_library, allocated, 0, nullptr);
+    if (thread == 0) { status = false; std::cout << "[-] Failed to call LoadLibraryA\n\n";  CloseHandle(handle); return status; }
+    std::cout << "[+] Successfully called LoadLibraryA\n";
+
+    WaitForSingleObject(thread, INFINITE);
 
     CloseHandle(thread);
     CloseHandle(handle);
@@ -85,7 +100,7 @@ void command_handler(std::unordered_map<std::string, int> commands) {
 			std::cout << "\n";
 			std::cout << R"([H] 1. help)" << std::endl;
 			std::cout << R"([H] 2. listpid)" << std::endl;
-			std::cout << R"([H] 3. inject <"path/to/dll"> <procesname.exe>)" << std::endl;
+			std::cout << R"([H] 3. inject <path/to/dll> <procesname.exe>)" << std::endl;
 			std::cout << R"([H] 4. exit)" << std::endl;
 			std::cout << "\n";
 			break;
@@ -95,24 +110,30 @@ void command_handler(std::unordered_map<std::string, int> commands) {
 			std::cout << "\n";
 			break;
 		case 3:
+			std::cout << "\n";
 			if (arguments.size() == 3) {
-				std::cout << "[+] Attempting injection\n";
 				LPCSTR fake_dll_path = arguments[1].c_str();
 				LPCSTR dll_path = get_full_path(fake_dll_path);
 
 				DWORD process_id = get_process_id(arguments[2]);
 
-				if (inject(dll_path, process_id) == true) {
-					std::cout << "[+] injection was successful\n\n";
+                std::cout << "\n[*] Full Path of DLL: " << dll_path << "\n";
+                std::cout << "[*] Process ID of " << arguments[2] << ": " << process_id << "\n\n";
+				if (inject((const char*)dll_path, process_id) == true) {
+					std::cout << "[+] Injection was successful\n\n";
 				} else {
-					std::cout << "[+] injection failed\n\n";
+					std::cout << "[+] Failed to inject into process\n\n";
 				}
 			} else {
 				std::cout << "[-] type help for syntax\n\n";
 			}
 			break;
 		case 4:
+            exit(0);
 			break;
+        default:
+            std::cout << "[-] type help\n\n";
+            break;
 		}
     }
 }
