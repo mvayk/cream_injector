@@ -3,5 +3,5 @@
 ## Commands
 - help
 - listpid
-- inject <relative or full path to dll> <processname.exe>
+- inject <path/to/dll> <processname.exe>
 - exit
