@@ -76,7 +76,7 @@ bool inject(LPCSTR dll_path, DWORD process_id) {
     std::cout << "[+] Successfully called LoadLibraryA\n";
 
     std::cout << "[+] Waiting for handle object\n";
-    WaitForSingleObject(handle, INFINITE);
+    WaitForSingleObject(thread, INFINITE);
     std::cout << "[+] Finished waiting for handle object\n";
     
     std::cout << "[+] Attempting to free memory\n";
@@ -92,7 +92,7 @@ bool inject(LPCSTR dll_path, DWORD process_id) {
 }
 
 void command_handler(std::unordered_map<std::string, int> commands) {
-    std::cout << "[>] ";
+    std::cout << "> ";
 
     std::string cin{};
     std::getline(std::cin, cin);
@@ -101,6 +101,13 @@ void command_handler(std::unordered_map<std::string, int> commands) {
 	std::vector<std::string> arguments;
 	std::string argument;
 
+	std::vector<std::string> help { R"(
+[H] help
+[H] listpid
+[H] inject <path/to/dll> <processname.exe>
+[H] exit
+	)" };
+
     while (stream >> argument) {
         arguments.push_back(argument);
     }
@@ -108,12 +115,9 @@ void command_handler(std::unordered_map<std::string, int> commands) {
     if (commands.find(arguments[0]) != commands.end()) {
 		switch (commands[arguments[0]]) {
 		case 1:
-			std::cout << "\n";
-			std::cout << R"([H] 1. help)" << std::endl;
-			std::cout << R"([H] 2. listpid)" << std::endl;
-			std::cout << R"([H] 3. inject <path/to/dll> <procesname.exe>)" << std::endl;
-			std::cout << R"([H] 4. exit)" << std::endl;
-			std::cout << "\n";
+            for (auto line : help) {
+                std::cout << line << "\n";
+            }
 			break;
 		case 2:
 			std::cout << "\n";
