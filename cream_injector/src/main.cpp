@@ -52,29 +52,17 @@ bool inject(LPCSTR dll_path, std::uintptr_t process_id) {
     HANDLE handle = OpenProcess(PROCESS_ALL_ACCESS, 0, process_id);
 
     PVOID allocated = VirtualAllocEx(handle, nullptr, sizeof(dll_path), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-    if (allocated == 0) { status = false; return status; }
+    if (allocated == 0) { status = false; CloseHandle(handle); return status; }
 
     status = WriteProcessMemory(handle, allocated, dll_path, sizeof(dll_path), NULL);
 
     HANDLE thread = CreateRemoteThread(handle, nullptr, NULL, LPTHREAD_START_ROUTINE(LoadLibraryA), allocated, NULL, nullptr);
-    if (thread == 0) { status = false; return status; }
+    if (thread == 0) { status = false; CloseHandle(handle); return status; }
 
     CloseHandle(thread);
     CloseHandle(handle);
 
     return status;
-}
-
-std::vector<std::string> split_args(const std::string& input) {
-    std::vector<std::string> args; std::istringstream stream(input); std::string argument;
-    
-    while (std::getline(stream, argument, ' ')) {
-        if (!input.empty()) {
-            args.push_back(argument);
-        }
-    }
-
-    return args;
 }
 
 void command_handler(std::unordered_map<std::string, int> commands) {
@@ -83,41 +71,49 @@ void command_handler(std::unordered_map<std::string, int> commands) {
     std::string cin{};
     std::getline(std::cin, cin);
 
-    std::vector<std::string> arguments = split_args(cin);
+	std::istringstream stream(cin);
+	std::vector<std::string> arguments;
+	std::string argument;
 
-    switch (commands[cin]) {
-    case 1:
-		std::cout << "\n";
-		std::cout << R"([H] 1. help)" << std::endl;
-		std::cout << R"([H] 2. listpid)" << std::endl;
-		std::cout << R"([H] 3. inject <"path/to/dll"> <procesname.exe>)" << std::endl;
-		std::cout << R"([H] 4. exit)" << std::endl;
-		std::cout << "\n";
-        break;
-    case 2:
-		std::cout << "\n";
-        list_processids();
-		std::cout << "\n";
-        break;
-    case 3:
-        if (arguments.size() < 3) {
-            std::cout << "[!] Missing arguments for injection. Usage: inject <path/to/dll> <processname.exe>\n";
-        } else {
-            std::cout << "[+] Attempting injection\n";
-            LPCSTR fake_dll_path = arguments[1].c_str();
-            LPCSTR dll_path = get_full_path(fake_dll_path);
+    while (stream >> argument) {
+        arguments.push_back(argument);
+    }
 
-            DWORD process_id = get_process_id(arguments[2]);
+    if (commands.find(arguments[0]) != commands.end()) {
+		switch (commands[arguments[0]]) {
+		case 1:
+			std::cout << "\n";
+			std::cout << R"([H] 1. help)" << std::endl;
+			std::cout << R"([H] 2. listpid)" << std::endl;
+			std::cout << R"([H] 3. inject <"path/to/dll"> <procesname.exe>)" << std::endl;
+			std::cout << R"([H] 4. exit)" << std::endl;
+			std::cout << "\n";
+			break;
+		case 2:
+			std::cout << "\n";
+			list_processids();
+			std::cout << "\n";
+			break;
+		case 3:
+			if (arguments.size() == 3) {
+				std::cout << "[+] Attempting injection\n";
+				LPCSTR fake_dll_path = arguments[1].c_str();
+				LPCSTR dll_path = get_full_path(fake_dll_path);
 
-            if (inject(dll_path, process_id) == true) {
-                std::cout << "[+] injection was successful\n";
-            } else {
-                std::cout << "[+] injection failed\n";
-            }
-        }
-        break;
-    case 4:
-        break;
+				DWORD process_id = get_process_id(arguments[2]);
+
+				if (inject(dll_path, process_id) == true) {
+					std::cout << "[+] injection was successful\n\n";
+				} else {
+					std::cout << "[+] injection failed\n\n";
+				}
+			} else {
+				std::cout << "[-] type help for syntax\n\n";
+			}
+			break;
+		case 4:
+			break;
+		}
     }
 }
 
