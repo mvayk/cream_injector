@@ -1,4 +1,5 @@
 # Cream Injector
+- x64 only
 
 ## Commands
 - help
