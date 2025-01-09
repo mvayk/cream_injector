@@ -129,6 +129,7 @@ void command_handler(std::unordered_map<std::string, int> commands) {
 			if (arguments.size() == 3) {
 				LPCSTR fake_dll_path = arguments[1].c_str();
 				LPCSTR dll_path = get_full_path(fake_dll_path);
+                if (!file_exists(dll_path)) { std::cout << "[-] DLL does not exist\n"; break; }
 
 				DWORD process_id = get_process_id(arguments[2]);
 
